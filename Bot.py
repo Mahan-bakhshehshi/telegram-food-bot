@@ -11,7 +11,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Use environment variable for security
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8369849343:AAH18_puMWbpR6XfNHioJObkc38rd4qA7p4")
 
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN environment variable not set!")
@@ -130,4 +130,5 @@ def main():
         logger.error(f"Bot crashed: {e}")
 
 if __name__ == "__main__":
+
     main()
