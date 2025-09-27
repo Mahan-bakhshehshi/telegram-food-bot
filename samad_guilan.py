@@ -1,29 +1,68 @@
-def reserve_food(username , password , college="دانشگاه گیلان"):
+def reserve_food(username, password, college="دانشگاه گیلان"):
     import time
+    import os
     from selenium import webdriver
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.webdriver.chrome.service import Service
-    from webdriver_manager.chrome import ChromeDriverManager
+    from selenium.webdriver.chrome.options import Options
     from selenium.webdriver.common.keys import Keys
     from selenium.webdriver.common.action_chains import ActionChains
 
     LOGIN_URL = "https://samad.app/login"
-
     COLLEGE = "دانشگاه گیلان"
-    USERNAME = username
-    PASSWORD = password
+    
+    # Configure Chrome for cloud deployment
+    chrome_options = Options()
+    
+    # Essential options for Railway/cloud deployment
+    chrome_options.add_argument("--headless")  
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--disable-extensions")
+    chrome_options.add_argument("--disable-web-security")
+    chrome_options.add_argument("--disable-features=VizDisplayCompositor")
+    chrome_options.add_argument("--remote-debugging-port=9222")
+    
+    # Reduce resource usage
+    chrome_options.add_argument("--disable-logging")
+    chrome_options.add_argument("--disable-plugins")
+    chrome_options.add_argument("--log-level=3")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
 
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
-    wait = WebDriverWait(driver, 2)  # Adjust wait time if needed
-    actions = ActionChains(driver)
-
+    driver = None
     try:
-        driver.get(LOGIN_URL)
-        driver.maximize_window()
+        print("🚀 Initializing Chrome driver...")
+        
+        # Try to use system Chrome first (better for Railway)
+        try:
+            from webdriver_manager.chrome import ChromeDriverManager
+            service = Service(ChromeDriverManager().install())
+        except Exception as e:
+            print(f"ChromeDriverManager failed: {e}")
+            # Fallback to system chromedriver
+            service = Service('/usr/bin/chromedriver')  # Common path on Linux
+        
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        
+        # Set timeouts
+        driver.implicitly_wait(10)
+        driver.set_page_load_timeout(60)
+        
+        wait = WebDriverWait(driver, 20)  # Increased timeout
+        actions = ActionChains(driver)
 
-        # --- College selection ---
+        print(f"🚀 Starting reservation for user: {username}")
+        driver.get(LOGIN_URL)
+        
+        # Wait for page to load
+        time.sleep(3)
+
+        # College selection
         college_selectors = [
             "input[placeholder*='دانشگاه']",
             "input[placeholder*='جستجو']",
@@ -37,20 +76,18 @@ def reserve_food(username , password , college="دانشگاه گیلان"):
                 college_input = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, selector)))
                 print(f"✅ Found college input using: {selector}")
                 break
-            except:
+            except Exception:
                 continue
 
         if not college_input:
-            print("❌ Could not find college input")
-            driver.save_screenshot("college_input_debug.png")
-            raise Exception("College input not found")
+            return "❌ نتوانست فیلد دانشگاه را پیدا کند"
 
         college_input.click()
         time.sleep(1)
         college_input.clear()
         college_input.send_keys(COLLEGE)
         print(f"✅ Typed: {COLLEGE}")
-        time.sleep(1)
+        time.sleep(2)
 
         # Select دانشگاه گیلان
         select_script = """
@@ -71,11 +108,13 @@ def reserve_food(username , password , college="دانشگاه گیلان"):
             college_input.send_keys(Keys.ARROW_DOWN)
             college_input.send_keys(Keys.ENTER)
             print("✅ Selected using keyboard navigation")
+        
+        time.sleep(2)
 
-        # --- Username & Password ---
+        # Username & Password
         username_selectors = [
             "input[type='text']:nth-of-type(2)",
-            "input[placeholder*='نام کاربری']",
+            "input[placeholder*='نام کاربری']", 
             "input[placeholder*='Username']",
             "#root input[type='text']:nth-of-type(2)"
         ]
@@ -84,34 +123,48 @@ def reserve_food(username , password , college="دانشگاه گیلان"):
         for selector in username_selectors:
             try:
                 username_input = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, selector)))
-                print(f"✅ Found username input using: {selector}")
+                print(f"✅ Found username input")
                 break
-            except:
+            except Exception:
                 continue
 
         if username_input:
-            username_input.send_keys(USERNAME)
+            username_input.clear()
+            username_input.send_keys(username)
             print("✅ Username entered")
+        else:
+            return "❌ نتوانست فیلد نام کاربری را پیدا کند"
 
-        password_input = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "input[type='password']")))
-        password_input.send_keys(PASSWORD)
-        print("✅ Password entered")
+        try:
+            password_input = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "input[type='password']")))
+            password_input.clear()
+            password_input.send_keys(password)
+            print("✅ Password entered")
+        except Exception:
+            return "❌ نتوانست فیلد رمز عبور را پیدا کند"
 
-        submit_btn = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button[type='button']")))
-        submit_btn.click()
-        print("✅ Login button clicked")
-        time.sleep(1)
+        try:
+            submit_btn = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button[type='button']")))
+            submit_btn.click()
+            print("✅ Login button clicked")
+            time.sleep(3)
+        except Exception:
+            return "❌ نتوانست دکمه ورود را پیدا کند"
 
-        # --- Student interface ---
-        print("🔍 Looking for 'ورود به رابط کاربری دانشجویی' button...")
-        student_interface_btn = wait.until(EC.element_to_be_clickable(
-            (By.XPATH, "//button//span[contains(text(), 'ورود به رابط کاربری دانشجویی')]")
-        ))
-        student_interface_btn.click()
-        print("✅ Clicked on 'ورود به رابط کاربری دانشجویی' button")
-        time.sleep(1)
+        # Check for login success
+        try:
+            # Student interface
+            print("🔍 Looking for student interface button...")
+            student_interface_btn = wait.until(EC.element_to_be_clickable(
+                (By.XPATH, "//button//span[contains(text(), 'ورود به رابط کاربری دانشجویی')]")
+            ))
+            student_interface_btn.click()
+            print("✅ Clicked on student interface button")
+            time.sleep(3)
+        except Exception:
+            return "❌ ورود ناموفق - لطفاً نام کاربری و رمز عبور را بررسی کنید"
 
-        # --- Wallet balance ---
+        # Check wallet balance
         print("💰 Checking wallet balance...")
         balance_script = """
         var walletLink = document.querySelector('a[href="/user/wallet"]');
@@ -131,122 +184,117 @@ def reserve_food(username , password , college="دانشگاه گیلان"):
         }
         return null;
         """
-        wallet_balance = driver.execute_script(balance_script)
+        
+        wallet_balance = None
+        try:
+            wallet_balance = driver.execute_script(balance_script)
+        except Exception as e:
+            print(f"Error getting balance: {e}")
 
+        result_message = ""
+        
         if wallet_balance is not None:
+            result_message += f"💳 موجودی کیف پول: {wallet_balance:,} تومان\n"
             print(f"💳 Current wallet balance: {wallet_balance:,} تومان")
 
             if wallet_balance > -60000:
-                print("✅ Wallet balance is more than -60,000 تومان")
+                print("✅ Wallet balance is sufficient")
+                result_message += "✅ موجودی کافی است\n"
 
-                # --- رزرو غذا ---
-                print("🔍 Looking for 'رزرو غذا' button...")
-                food_reservation_btn = wait.until(EC.element_to_be_clickable(
-                    (By.XPATH, "//span[contains(text(), 'رزرو غذا')]")
-                ))
-                food_reservation_btn.click()
-                print("✅ Clicked on 'رزرو غذا' button")
-                time.sleep(2)
-
-                # --- سلف مرکزی ---
-                print("🔍 Trying to click on 'سلف مرکزی'...")
                 try:
-                    self_markazi = wait.until(EC.presence_of_element_located(
+                    # Food reservation
+                    print("🔍 Looking for food reservation button...")
+                    food_reservation_btn = wait.until(EC.element_to_be_clickable(
+                        (By.XPATH, "//span[contains(text(), 'رزرو غذا')]")
+                    ))
+                    food_reservation_btn.click()
+                    print("✅ Clicked on food reservation button")
+                    time.sleep(4)
+
+                    # سلف مرکزی
+                    print("🔍 Trying to click on سلف مرکزی...")
+                    self_markazi = wait.until(EC.element_to_be_clickable(
                         (By.XPATH, "//div[@class='self-list-item'][span[text()='سلف مرکزی']]")
                     ))
                     driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", self_markazi)
                     driver.execute_script("arguments[0].click();", self_markazi)
-                    print("✅ سلف مرکزی clicked via JavaScript")
-                    time.sleep(2)
+                    print("✅ سلف مرکزی clicked")
+                    time.sleep(3)
 
-                    # --- Improved modal closing logic ---
-                    print("🔍 Checking for 'به غذاها امتیاز دهید' modal...")
+                    # Close any modal that might appear
                     try:
-                        modal_header = wait.until(EC.presence_of_element_located(
-                            (By.XPATH, "//div[contains(@class, 'ant-modal')]//*[contains(text(), 'به غذاها امتیاز دهید')]")
-                        ))
-                        print("✅ Found modal with header 'به غذاها امتیاز دهید'")
-                        close_selectors = [
-                            "button.ant-modal-close",
-                            ".ant-modal-close",
-                            "button[aria-label='Close']",
-                            "span.ant-modal-close-x"
-                        ]
-                        close_button = None
-                        for selector in close_selectors:
-                            try:
-                                close_button = driver.find_element(By.CSS_SELECTOR, selector)
-                                if close_button.is_displayed():
-                                    print(f"✅ Found close button with selector: {selector}")
-                                    break
-                            except:
-                                continue
-                        if close_button:
-                            driver.execute_script("arguments[0].click();", close_button)
-                            print("✅ Modal closed successfully")
-                        else:
-                            print("❌ Could not find close button")
-                    except Exception as modal_error:
-                        print(f"⚠️ Modal not found or already closed: {modal_error}")
-
-                    modal_check_script = """
-                    var modals = document.querySelectorAll('.ant-modal');
-                    for (var i = 0; i < modals.length; i++) {
-                        if (modals[i].offsetWidth > 0 && modals[i].offsetHeight > 0) {
-                            var closeBtn = modals[i].querySelector('.ant-modal-close');
-                            if (closeBtn) {
-                                closeBtn.click();
-                                return 'Modal closed';
+                        modal_close_script = """
+                        var modals = document.querySelectorAll('.ant-modal');
+                        var closedAny = false;
+                        for (var i = 0; i < modals.length; i++) {
+                            if (modals[i].offsetWidth > 0 && modals[i].offsetHeight > 0) {
+                                var closeBtn = modals[i].querySelector('.ant-modal-close, .ant-modal-close-x');
+                                if (closeBtn) {
+                                    closeBtn.click();
+                                    closedAny = true;
+                                }
                             }
                         }
-                    }
-                    return 'No visible modal found';
-                    """
-                    modal_result = driver.execute_script(modal_check_script)
-                    print(f"📋 Modal check result: {modal_result}")
+                        return closedAny;
+                        """
+                        driver.execute_script(modal_close_script)
+                        time.sleep(1)
+                    except Exception:
+                        pass
 
-                    # --- رزرو همه غذاها ---
-                    print("🔍 Looking for رزرو buttons...")
+                    # Reserve all meals
+                    print("🔍 Looking for reservation buttons...")
+                    time.sleep(2)  # Wait for page to load
+                    
                     reserve_buttons = driver.find_elements(By.XPATH, "//button[.//span[contains(text(), 'رزرو')]]")
+                    
                     if reserve_buttons:
-                        print(f"✅ Found {len(reserve_buttons)} رزرو buttons")
+                        reserved_count = 0
+                        print(f"✅ Found {len(reserve_buttons)} reservation buttons")
+                        
                         for i, btn in enumerate(reserve_buttons, start=1):
                             try:
-                                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn)
-                                driver.execute_script("arguments[0].click();", btn)
-                                print(f"✅ Clicked رزرو button #{i}")
-                                time.sleep(0.5)
+                                # Check if button is still clickable
+                                if btn.is_enabled() and btn.is_displayed():
+                                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn)
+                                    time.sleep(0.5)
+                                    driver.execute_script("arguments[0].click();", btn)
+                                    print(f"✅ Clicked reservation button #{i}")
+                                    reserved_count += 1
+                                    time.sleep(1)  # Wait between clicks
                             except Exception as e:
-                                print(f"❌ Failed to click رزرو button #{i}: {e}")
+                                print(f"❌ Failed to click button #{i}: {e}")
+                        
+                        if reserved_count > 0:
+                            result_message += f"🍽️ تعداد {reserved_count} وعده غذایی رزرو شد!"
+                        else:
+                            result_message += "⚠️ هیچ وعده غذایی برای رزرو یافت نشد"
                     else:
-                        print("⚠️ No رزرو buttons found")
-
-                except Exception as e1:
-                    print(f"⚠️ JS click failed: {e1}")
-                    try:
-                        actions.move_to_element(self_markazi).click().perform()
-                        print("✅ سلف مرکزی clicked via ActionChains")
-                    except Exception as e2:
-                        print(f"❌ Could not click سلف مرکزی: {e2}")
+                        result_message += "⚠️ هیچ دکمه رزرو فعالی یافت نشد"
+                        print("⚠️ No reservation buttons found")
+                        
+                except Exception as e:
+                    print(f"❌ Error in food reservation: {e}")
+                    result_message += f"❌ خطا در رزرو غذا: {str(e)}"
 
             else:
-                print(f"❌ Wallet balance is {wallet_balance:,} تومان (less than or equal to -60,000 تومان)")
-                print("⏭️ Skipping the click actions")
+                result_message += f"❌ موجودی ناکافی ({wallet_balance:,} تومان)\nحداقل موجودی مورد نیاز: -60,000 تومان"
+                print(f"❌ Insufficient balance: {wallet_balance:,} تومان")
         else:
-            print("❌ Could not find wallet balance on the page")
+            result_message += "⚠️ نتوانست موجودی کیف پول را بررسی کند - ممکن است ورود ناموفق بوده باشد"
+            print("❌ Could not find wallet balance - possibly login failed")
 
-        # --- Final check ---
-        print("📄 Current URL:", driver.current_url)
-        print("🎉 Script execution completed!")
+        return result_message
 
     except Exception as e:
-        print(f"❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
-        driver.save_screenshot("error_debug.png")
-        print("📸 Screenshot saved as 'error_debug.png'")
+        error_msg = f"خطا در سیستم رزرو: {str(e)}"
+        print(f"❌ Main Error: {e}")
+        return error_msg
 
     finally:
-        print("⏳ Keeping browser open for 30 seconds for inspection...")
-        time.sleep(30)
-        driver.quit()
+        if driver:
+            try:
+                driver.quit()
+                print("🔒 Browser closed")
+            except Exception:
+                pass
